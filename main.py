@@ -3,6 +3,18 @@ import re
 import os
 import sys
 
+# 记录下载视频数
+video_count = 0
+# 记录下载图片数
+image_count = 0
+
+headers = {
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36'
+                      ' (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+        'accept': '*/*',
+        'accept-encoding': 'gzip, deflate, sdch, br'
+    }
+
 
 def get_user_info(username):
     """
@@ -16,16 +28,17 @@ def get_user_info(username):
             re.findall('<meta property="og:description" content=".* Following, (.*?) Posts', text)[0])
 
 
-def get_user_media(username):
+def get_user_data(username):
     """
-    根据用户名获取用户所有图片的链接
-    :param username: 用户名
-    :return: 图片链接列表
+    获取用户所有的照片和视频json信息
+    :param username:
+    :return:
     """
+
     user_id, media_num = get_user_info(username)
 
     print('=============================\n' +
-          '共找到'+media_num+'张图片、视频\n' +
+          '共找到' + media_num + '张图片、视频\n' +
           '=============================')
 
     url = 'https://www.instagram.com/graphql/query/'
@@ -35,53 +48,81 @@ def get_user_media(username):
                'first': media_num}
 
     r = requests.get(url, params=payload)
-    return re.findall('"thumbnail_src": "(.*?)",', r.text)
+
+    # f = open('json.txt', 'w')
+    # f.write(str(re.findall('"node":(.*?)}}', r.text)))
+
+    return re.findall('"node":(.*?)}}', r.text)
 
 
-def save_image(list_image, username):
+def get_user_image_and_video(username):
+    global image_count
+    global video_count
+    data = get_user_data(username)
+    for node in data:
+        if node.find('GraphImage') != -1:
+            print('正在下载图片')
+            image_count += 1
+            save_image(username, re.findall('"display_url": "(.*?)"', node))
+        elif node.find('GraphVideo') != -1:
+            print('正在下载视频')
+            video_count += 1
+            # FIXME: 有些shortcode找不到
+            save_video(username, re.findall('"shortcode": "(.*?)"', node))
+
+
+def save_image(username, image_url):
     """
     保存照片到本地
-    :param list_image:
+    :param username:
+    :param image_url:
     :return:
     """
-
-    header = {
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36'
-                      ' (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
-        'accept': '*/*',
-        'accept-encoding': 'gzip, deflate, sdch, br'
-    }
+    global headers
 
     if os.path.exists(username):
         os.chdir(username)
     else:
         os.mkdir(username)
         os.chdir(username)
+    print(image_url)
+    # 由url生成照片文件名
+    file_name = re.findall('/t51.2885-15/(.*)', image_url)
+    print(file_name)
+    # 新建文件
+    file = open(file_name[0].replace("/", "_"), 'wb')
+    # 获取照片
+    r = requests.get(image_url, headers=headers, timeout=5)
+    # FIXME: 保存的照片都是正方形
+    file.write(r.content)
+    file.close()
 
-    num = 1
 
-    for url in list_image:
-        new_url = re.findall('http.*?/t51.2885-15/', url)[0] + re.findall('/e.*?/(.*?.jpg)', url)[0]
-
-        print('正在下载第:'+str(num)+'张图片')
-
-        num += 1
-
-        file_name = re.findall('t51.2885-15/(.*)', new_url)
-
-        print('文件名：'+file_name[0].replace("/", "_"))
-
-        file = open(file_name[0].replace("/", "_"), 'wb')
-
-        # FIXME: 爬到一定实现出现错误：requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-c-a.akamaihd.net', port=443): Read timed out.
-
-        r = requests.get(new_url, headers=header, timeout=5)
-
-        # FIXME: 保存的照片都是正方形
-
-        file.write(r.content)
-        file.close()
-        print('下载成功')
+def save_video(username, shortcode):
+    """
+    保存视频到本地
+    :param username:
+    :param shortcode:
+    :return:
+    """
+    if len(shortcode):
+        pass
+    else:
+        return
+    if os.path.exists(username):
+        os.chdir(username)
+    else:
+        os.mkdir(username)
+        os.chdir(username)
+    url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
+    r = requests.get(url, headers=headers, timeout=5)
+    video_url = re.findall('"video_url": "(.*?)"', r.text)
+    print(video_url)
+    r_video = requests.get(video_url, headers=headers)
+    video_filename = re.findall('/t50.2886-16/(.*?)', video_url)
+    f = open(video_filename, 'wb')
+    f.write(r_video.content)
+    f.close()
 
 
 def main():
@@ -92,12 +133,17 @@ def main():
         os.mkdir('download')
         os.chdir('download')
 
-    save_image(get_user_media(sys.argv[1]), sys.argv[1])
+    # save_image(get_user_image(sys.argv[1]), sys.argv[1])
 
+    get_user_image_and_video(sys.argv[1])
     print('=============================\n' +
-          '全部下载完成\n'
-          '=============================\n' +)
+          '全部下载完成\n' +
+          '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
+          '=============================\n')
 
 
 if __name__ == "__main__":
     main()
+
+# FIXME: 爬到一定时间出现错误：
+# requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-c-a.akamaihd.net', port=443): Read timed out.
