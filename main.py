@@ -50,21 +50,34 @@ def get_user_data(username):
     r = requests.get(url, params=payload)
 
     # f = open('json.txt', 'w')
-    # f.write(str(re.findall('"node":(.*?)}}', r.text)))
+    # f.write(str(re.findall('"node":(.*?)"edge_liked_by"', r.text)))
 
-    return re.findall('"node":(.*?)}}', r.text)
+    return re.findall('"node":(.*?)"edge_liked_by"', r.text)
 
 
 def get_user_image_and_video(username):
     global image_count
     global video_count
+
+    if os.path.exists(username):
+        os.chdir(username)
+    else:
+        os.mkdir(username)
+        os.chdir(username)
+
+    path = os.getcwd()
     data = get_user_data(username)
     for node in data:
-        if node.find('GraphImage') != -1:
+        os.chdir(path)
+        if re.findall('GraphImage', node):
             print('正在下载图片')
             image_count += 1
+            # print('url:' + str(re.findall('"display_url": "(.*?)"', node)))
             save_image(username, re.findall('"display_url": "(.*?)"', node))
-        elif node.find('GraphVideo') != -1:
+        elif re.findall('GraphSidecar', node):
+            # 多张图片
+            pass
+        elif re.findall('GraphVideo', node):
             print('正在下载视频')
             video_count += 1
             # FIXME: 有些shortcode找不到
@@ -78,21 +91,26 @@ def save_image(username, image_url):
     :param image_url:
     :return:
     """
-    global headers
 
-    if os.path.exists(username):
-        os.chdir(username)
+    os.chdir('image')
+
+    if image_url:
+        pass
     else:
-        os.mkdir(username)
-        os.chdir(username)
+        return
+
+    image_url = image_url[0]
+
+    global headers
+    global image_count
+
     print(image_url)
     # 由url生成照片文件名
-    file_name = re.findall('/t51.2885-15/(.*)', image_url)
-    print(file_name)
+    image_filename = username + '_' + str(image_count) + '.jpg'
     # 新建文件
-    file = open(file_name[0].replace("/", "_"), 'wb')
+    file = open(image_filename, 'wb')
     # 获取照片
-    r = requests.get(image_url, headers=headers, timeout=5)
+    r = requests.get(image_url, headers=headers, timeout=30)
     # FIXME: 保存的照片都是正方形
     file.write(r.content)
     file.close()
@@ -105,21 +123,20 @@ def save_video(username, shortcode):
     :param shortcode:
     :return:
     """
-    if len(shortcode):
+
+    os.chdir('video')
+
+    global video_count
+    if shortcode:
         pass
     else:
         return
-    if os.path.exists(username):
-        os.chdir(username)
-    else:
-        os.mkdir(username)
-        os.chdir(username)
     url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
-    r = requests.get(url, headers=headers, timeout=5)
+    r = requests.get(url, headers=headers)
     video_url = re.findall('"video_url": "(.*?)"', r.text)
-    print(video_url)
-    r_video = requests.get(video_url, headers=headers)
-    video_filename = re.findall('/t50.2886-16/(.*?)', video_url)
+    print(video_url[0])
+    r_video = requests.get(video_url[0], headers=headers, timeout=60)
+    video_filename = username + '_' + str(video_count) + '.mp4'
     f = open(video_filename, 'wb')
     f.write(r_video.content)
     f.close()
@@ -147,3 +164,4 @@ if __name__ == "__main__":
 
 # FIXME: 爬到一定时间出现错误：
 # requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-c-a.akamaihd.net', port=443): Read timed out.
+# FIXME: 有些视频和图片爬不到
