@@ -64,6 +64,8 @@ def get_user_image_and_video(username):
     else:
         os.mkdir(username)
         os.chdir(username)
+        os.mkdir('image')
+        os.mkdir('video')
 
     path = os.getcwd()
     data = get_user_data(username)
@@ -72,16 +74,18 @@ def get_user_image_and_video(username):
         if re.findall('GraphImage', node):
             print('正在下载图片')
             image_count += 1
-            # print('url:' + str(re.findall('"display_url": "(.*?)"', node)))
-            save_image(username, re.findall('"display_url": "(.*?)"', node))
+            os.chdir('image')
+            # save_image(username, re.findall('"display_url": "(.*?)"', node))
         elif re.findall('GraphSidecar', node):
-            # 多张图片
-            pass
+            print('正在下载图片组')
+            os.chdir('image')
+            save_slider(username, re.findall('"shortcode": "(.*?)"', node))
         elif re.findall('GraphVideo', node):
             print('正在下载视频')
             video_count += 1
+            os.chdir('video')
             # FIXME: 有些shortcode找不到
-            save_video(username, re.findall('"shortcode": "(.*?)"', node))
+            # save_video(username, re.findall('"shortcode": "(.*?)"', node))
 
 
 def save_image(username, image_url):
@@ -92,14 +96,12 @@ def save_image(username, image_url):
     :return:
     """
 
-    os.chdir('image')
-
     if image_url:
         pass
     else:
         return
 
-    image_url = image_url[0]
+    # image_url = image_url[0]
 
     global headers
     global image_count
@@ -123,14 +125,13 @@ def save_video(username, shortcode):
     :param shortcode:
     :return:
     """
-
-    os.chdir('video')
-
-    global video_count
     if shortcode:
         pass
     else:
         return
+
+    global video_count
+
     url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
     r = requests.get(url, headers=headers)
     video_url = re.findall('"video_url": "(.*?)"', r.text)
@@ -140,6 +141,25 @@ def save_video(username, shortcode):
     f = open(video_filename, 'wb')
     f.write(r_video.content)
     f.close()
+
+
+def save_slider(username, shortcode):
+    if shortcode:
+        pass
+    else:
+        return
+
+    global image_count
+
+    url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
+
+    r = requests.get(url, headers=headers)
+    image_url_list = re.findall('"display_url": "(.*?)"', r.text)
+    # 第一张封面和第二张重复
+    image_url_list = image_url_list[1:]
+    for url in image_url_list:
+        image_count += 1
+        save_image(username, url)
 
 
 def main():
@@ -152,7 +172,7 @@ def main():
 
     # save_image(get_user_image(sys.argv[1]), sys.argv[1])
 
-    get_user_image_and_video(sys.argv[1])
+    get_user_image_and_video('tan_jin_')
     print('=============================\n' +
           '全部下载完成\n' +
           '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
