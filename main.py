@@ -24,18 +24,19 @@ def get_user_info(username):
     """
     url = 'https://www.instagram.com/' + username
     text = requests.get(url).text
-    return (re.findall('"owner": {"id": "(.*?)"},', text)[0],
+    try:
+        return (re.findall('"owner": {"id": "(.*?)"},', text)[0],
             re.findall('<meta property="og:description" content=".* Following, (.*?) Posts', text)[0])
+    except :
+        print('找不到该用户')
 
 
-def get_user_data(username):
+def get_user_data(user_id, media_num):
     """
     获取用户所有的照片和视频json信息
     :param username:
     :return:
     """
-
-    user_id, media_num = get_user_info(username)
 
     print('=============================\n' +
           '共找到' + media_num + '张图片、视频\n' +
@@ -55,7 +56,7 @@ def get_user_data(username):
     return re.findall('"node":(.*?)"edge_liked_by"', r.text)
 
 
-def get_user_image_and_video(username):
+def get_user_image_and_video(data, username):
     global image_count
     global video_count
 
@@ -68,7 +69,7 @@ def get_user_image_and_video(username):
         os.mkdir('video')
 
     path = os.getcwd()
-    data = get_user_data(username)
+
     for node in data:
         os.chdir(path)
         if re.findall('GraphImage', node):
@@ -171,8 +172,12 @@ def main():
         os.chdir('download')
 
     # save_image(get_user_image(sys.argv[1]), sys.argv[1])
-
-    get_user_image_and_video('tan_jin_')
+    username = sys.argv[1]
+    user_id, media_num = get_user_info(username)
+    if user_id == None:
+        return
+    data = get_user_data(user_id, media_num)
+    get_user_image_and_video(data, username)
     print('=============================\n' +
           '全部下载完成\n' +
           '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
