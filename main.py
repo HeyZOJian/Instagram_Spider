@@ -2,11 +2,10 @@ import requests
 import re
 import os
 import sys
+import threading
+import random
+import string
 
-# 记录下载视频数
-video_count = 0
-# 记录下载图片数
-image_count = 0
 
 headers = {
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36'
@@ -73,23 +72,22 @@ def get_user_image_and_video(data, username):
     for node in data:
         os.chdir(path)
         if re.findall('GraphImage', node):
-            print('正在下载图片')
-            image_count += 1
             os.chdir('image')
-            # save_image(username, re.findall('"display_url": "(.*?)"', node))
+            file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.jpg'
+            threading.Thread(target=save_image,
+                             args=(file_name, re.findall('"display_url": "(.*?)"', node)[0])).start()
         elif re.findall('GraphSidecar', node):
-            print('正在下载图片组')
             os.chdir('image')
-            save_slider(username, re.findall('"shortcode": "(.*?)"', node))
+            threading.Thread(target=save_slider,
+                             args=(re.findall('"shortcode": "(.*?)"', node))).start()
         elif re.findall('GraphVideo', node):
-            print('正在下载视频')
-            video_count += 1
             os.chdir('video')
-            # FIXME: 有些shortcode找不到
-            # save_video(username, re.findall('"shortcode": "(.*?)"', node))
+            file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.mp4'
+            threading.Thread(target=save_video,
+                             args=(file_name, re.findall('"shortcode": "(.*?)"', node))).start()
 
 
-def save_image(username, image_url):
+def save_image(file_name, image_url):
     """
     保存照片到本地
     :param username:
@@ -106,12 +104,10 @@ def save_image(username, image_url):
 
     global headers
     global image_count
-
-    print(image_url)
-    # 由url生成照片文件名
-    image_filename = username + '_' + str(image_count) + '.jpg'
+    # print('正在下载图片')
+    # print(image_url)
     # 新建文件
-    file = open(image_filename, 'wb')
+    file = open(file_name, 'wb')
     # 获取照片
     r = requests.get(image_url, headers=headers, timeout=30)
     # FIXME: 保存的照片都是正方形
@@ -119,7 +115,7 @@ def save_image(username, image_url):
     file.close()
 
 
-def save_video(username, shortcode):
+def save_video(file_name, shortcode):
     """
     保存视频到本地
     :param username:
@@ -136,31 +132,29 @@ def save_video(username, shortcode):
     url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
     r = requests.get(url, headers=headers)
     video_url = re.findall('"video_url": "(.*?)"', r.text)
-    print(video_url[0])
+    # print('正在下载视频')
+    # print(video_url[0])
     r_video = requests.get(video_url[0], headers=headers, timeout=60)
-    video_filename = username + '_' + str(video_count) + '.mp4'
-    f = open(video_filename, 'wb')
+    f = open(file_name, 'wb')
     f.write(r_video.content)
     f.close()
 
 
-def save_slider(username, shortcode):
+def save_slider(shortcode):
     if shortcode:
         pass
     else:
         return
 
-    global image_count
-
-    url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
-
+    url = 'https://www.instagram.com/p/' + shortcode + '/?__a=1'
     r = requests.get(url, headers=headers)
     image_url_list = re.findall('"display_url": "(.*?)"', r.text)
     # 第一张封面和第二张重复
     image_url_list = image_url_list[1:]
     for url in image_url_list:
-        image_count += 1
-        save_image(username, url)
+        file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.jpg'
+        # threading.Thread(target=save_image, args=(file_name, url)).start()
+        save_image(file_name, url)
 
 
 def main():
@@ -171,22 +165,21 @@ def main():
         os.mkdir('download')
         os.chdir('download')
 
+
     # save_image(get_user_image(sys.argv[1]), sys.argv[1])
-    username = sys.argv[1]
+    # username = sys.argv[1]
+    username = 'zojian'
     user_id, media_num = get_user_info(username)
     if user_id == None:
         return
     data = get_user_data(user_id, media_num)
     get_user_image_and_video(data, username)
-    print('=============================\n' +
-          '全部下载完成\n' +
-          '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
-          '=============================\n')
-
+    # print('=============================\n' +
+    #       '全部下载完成\n' +
+    #       '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
+    #       '=============================\n')
 
 if __name__ == "__main__":
     main()
 
-# FIXME: 爬到一定时间出现错误：
-# requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-c-a.akamaihd.net', port=443): Read timed out.
-# FIXME: 有些视频和图片爬不到
+# FIXME: 出现requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-b-a.akamaihd.net', port=443): Read timed out.
