@@ -1,11 +1,13 @@
 import requests
 import re
 import os
+import time
 import sys
 import threading
 import random
 import string
 
+import threadpool
 
 headers = {
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_4) AppleWebKit/537.36'
@@ -14,6 +16,7 @@ headers = {
         'accept-encoding': 'gzip, deflate, sdch, br'
     }
 
+pool = threadpool.ThreadPool(5)
 
 def get_user_info(username):
     """
@@ -69,22 +72,39 @@ def get_user_image_and_video(data, username):
 
     path = os.getcwd()
 
+    request_list = []  # 存放任务列表
+    fun_var = []
+    # 构造任务列表
     for node in data:
         os.chdir(path)
         if re.findall('GraphImage', node):
-            os.chdir('image')
-            file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.jpg'
-            threading.Thread(target=save_image,
-                             args=(file_name, re.findall('"display_url": "(.*?)"', node)[0])).start()
+            # os.chdir('image')
+            fun_var.append((['image', re.findall('"display_url": "(.*?)"', node)[0]], None))
         elif re.findall('GraphSidecar', node):
-            os.chdir('image')
-            threading.Thread(target=save_slider,
-                             args=(re.findall('"shortcode": "(.*?)"', node))).start()
+            # os.chdir('image')
+            fun_var.append((['slider', re.findall('"shortcode": "(.*?)"', node)[0]], None))
         elif re.findall('GraphVideo', node):
-            os.chdir('video')
-            file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.mp4'
-            threading.Thread(target=save_video,
-                             args=(file_name, re.findall('"shortcode": "(.*?)"', node))).start()
+            # os.chdir('video')
+            fun_var.append((['video', re.findall('"shortcode": "(.*?)"', node)], None))
+
+    request_list = threadpool.makeRequests(save, fun_var)
+    # map(pool.putRequest, request_list)
+    [pool.putRequest(req) for req in request_list]
+    # 等待所有任务处理完成，则返回，如果没有处理完，则一直阻塞
+    pool.wait()
+
+
+def save(media_type, code):
+    time.sleep(1)
+    file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8))
+    if media_type == 'image':
+        file_name += '.jpg'
+        save_image(file_name, code)
+    elif media_type == 'video':
+        file_name += '.mp4'
+        save_video(file_name, code)
+    elif media_type == 'slider':
+        save_slider(code)
 
 
 def save_image(file_name, image_url):
@@ -99,13 +119,7 @@ def save_image(file_name, image_url):
         pass
     else:
         return
-
-    # image_url = image_url[0]
-
     global headers
-    global image_count
-    # print('正在下载图片')
-    # print(image_url)
     # 新建文件
     file = open(file_name, 'wb')
     # 获取照片
@@ -168,7 +182,7 @@ def main():
 
     # save_image(get_user_image(sys.argv[1]), sys.argv[1])
     # username = sys.argv[1]
-    username = 'zojian'
+    username = 'sehunnnnie'
     user_id, media_num = get_user_info(username)
     if user_id == None:
         return
