@@ -16,67 +16,77 @@ headers = {
         'accept-encoding': 'gzip, deflate, sdch, br'
     }
 
-pool = threadpool.ThreadPool(5)
+pool = threadpool.ThreadPool(10)
+
 
 def get_user_info(username):
     """
-    获取用户ID和他的帖子数
+    获取用户ID
     :param username: 用户名
-    :return: [用户ID，帖子数]
+    :return: 用户ID
     """
     url = 'https://www.instagram.com/' + username
     text = requests.get(url).text
     try:
-        return (re.findall('"owner": {"id": "(.*?)"},', text)[0],
-            re.findall('<meta property="og:description" content=".* Following, (.*?) Posts', text)[0])
+        return re.findall('"owner": {"id": "(.*?)"},', text)[0]
     except :
         print('找不到该用户')
 
 
-def get_user_data(user_id, media_num):
+def download(user_name):
+
     """
     获取用户所有的照片和视频json信息
     :param username:
     :return:
     """
+    if os.path.exists(user_name):
+        os.chdir(user_name)
+    else:
+        os.mkdir(user_name)
+        os.chdir(user_name)
+        # os.mkdir('image')
+        # os.mkdir('video')
 
-    print('=============================\n' +
-          '共找到' + media_num + '张图片、视频\n' +
-          '=============================')
+    user_id = get_user_info(user_name)
 
     url = 'https://www.instagram.com/graphql/query/'
 
     payload = {'query_id': 17880160963012870,
                'id': user_id,
-               'first': media_num}
+               'first': 0}
 
     r = requests.get(url, params=payload)
+    # 用户发布的帖子数
+    media_num = re.findall('"count": (.*?),', r.text)[0]
+    payload['first'] = 200
+    print('=============================\n' +
+          '共找到' + media_num + '张图片、视频\n' +
+          '=============================')
 
-    # f = open('json.txt', 'w')
-    # f.write(str(re.findall('"node":(.*?)"edge_liked_by"', r.text)))
+    # 帖子数多时分批请求json数据
+    r = requests.get(url, params=payload)
+    end_cursor = re.findall('"end_cursor": "(.*?)"', r.text)
+    payload['after'] = end_cursor
+    get_user_image_and_video(re.findall('"node":(.*?)"edge_liked_by"', r.text))
+    for index in range(int(int(media_num)/200)):
+        r = requests.get(url, params=payload)
+        end_cursor = re.findall('"end_cursor": "(.*?)"', r.text)
+        payload['after'] = end_cursor
+        get_user_image_and_video(re.findall('"node":(.*?)"edge_liked_by"', r.text))
 
-    return re.findall('"node":(.*?)"edge_liked_by"', r.text)
 
+def get_user_image_and_video(data):
 
-def get_user_image_and_video(data, username):
-    global image_count
-    global video_count
+    # path = os.getcwd()
 
-    if os.path.exists(username):
-        os.chdir(username)
-    else:
-        os.mkdir(username)
-        os.chdir(username)
-        os.mkdir('image')
-        os.mkdir('video')
-
-    path = os.getcwd()
+    print('start download')
 
     request_list = []  # 存放任务列表
     fun_var = []
     # 构造任务列表
     for node in data:
-        os.chdir(path)
+        # os.chdir(path)
         if re.findall('GraphImage', node):
             # os.chdir('image')
             fun_var.append((['image', re.findall('"display_url": "(.*?)"', node)[0]], None))
@@ -115,6 +125,7 @@ def save_image(file_name, image_url):
     :return:
     """
 
+    print('saving image...')
     if image_url:
         pass
     else:
@@ -124,7 +135,6 @@ def save_image(file_name, image_url):
     file = open(file_name, 'wb')
     # 获取照片
     r = requests.get(image_url, headers=headers, timeout=30)
-    # FIXME: 保存的照片都是正方形
     file.write(r.content)
     file.close()
 
@@ -136,6 +146,8 @@ def save_video(file_name, shortcode):
     :param shortcode:
     :return:
     """
+    print('saving video...')
+
     if shortcode:
         pass
     else:
@@ -181,13 +193,9 @@ def main():
 
 
     # save_image(get_user_image(sys.argv[1]), sys.argv[1])
-    # username = sys.argv[1]
-    username = 'sehunnnnie'
-    user_id, media_num = get_user_info(username)
-    if user_id == None:
-        return
-    data = get_user_data(user_id, media_num)
-    get_user_image_and_video(data, username)
+    # user_name = sys.argv[1]
+    user_name = 'paris_gong'
+    download(user_name)
     # print('=============================\n' +
     #       '全部下载完成\n' +
     #       '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
@@ -195,5 +203,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# FIXME: 出现requests.exceptions.ConnectionError: HTTPSConnectionPool(host='ig-s-b-a.akamaihd.net', port=443): Read timed out.
