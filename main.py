@@ -3,9 +3,6 @@ import re
 import os
 import time
 import sys
-import threading
-import random
-import string
 
 import threadpool
 
@@ -16,7 +13,7 @@ headers = {
         'accept-encoding': 'gzip, deflate, sdch, br'
     }
 
-pool = threadpool.ThreadPool(10)
+pool = threadpool.ThreadPool(5)
 
 
 def get_user_info(username):
@@ -82,7 +79,6 @@ def get_user_image_and_video(data):
 
     print('start download')
 
-    request_list = []  # 存放任务列表
     fun_var = []
     # 构造任务列表
     for node in data:
@@ -105,26 +101,23 @@ def get_user_image_and_video(data):
 
 
 def save(media_type, code):
-    time.sleep(1)
-    file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8))
+    time.sleep(0.5)
     if media_type == 'image':
-        file_name += '.jpg'
-        save_image(file_name, code)
+        save_image(code)
     elif media_type == 'video':
-        file_name += '.mp4'
-        save_video(file_name, code)
+        save_video(code)
     elif media_type == 'slider':
         save_slider(code)
 
 
-def save_image(file_name, image_url):
+def save_image(image_url):
     """
     保存照片到本地
     :param username:
     :param image_url:
     :return:
     """
-
+    file_name = re.findall('/t.*?/e../(.*)', image_url)[0]
     print('saving image...')
     if image_url:
         pass
@@ -134,12 +127,12 @@ def save_image(file_name, image_url):
     # 新建文件
     file = open(file_name, 'wb')
     # 获取照片
-    r = requests.get(image_url, headers=headers, timeout=30)
+    r = requests.get(image_url, headers=headers)
     file.write(r.content)
     file.close()
 
 
-def save_video(file_name, shortcode):
+def save_video(shortcode):
     """
     保存视频到本地
     :param username:
@@ -153,14 +146,11 @@ def save_video(file_name, shortcode):
     else:
         return
 
-    global video_count
-
     url = 'https://www.instagram.com/p/' + shortcode[0] + '/?__a=1'
     r = requests.get(url, headers=headers)
     video_url = re.findall('"video_url": "(.*?)"', r.text)
-    # print('正在下载视频')
-    # print(video_url[0])
-    r_video = requests.get(video_url[0], headers=headers, timeout=60)
+    file_name = re.findall('/t.*?/(.*)', video_url[0])[0]
+    r_video = requests.get(video_url[0], headers=headers)
     f = open(file_name, 'wb')
     f.write(r_video.content)
     f.close()
@@ -178,9 +168,7 @@ def save_slider(shortcode):
     # 第一张封面和第二张重复
     image_url_list = image_url_list[1:]
     for url in image_url_list:
-        file_name = ''.join(random.sample(string.ascii_letters + string.digits, 8)) + '.jpg'
-        # threading.Thread(target=save_image, args=(file_name, url)).start()
-        save_image(file_name, url)
+        save_image(url)
 
 
 def main():
@@ -191,15 +179,9 @@ def main():
         os.mkdir('download')
         os.chdir('download')
 
+    user_name = sys.argv[1]
 
-    # save_image(get_user_image(sys.argv[1]), sys.argv[1])
-    # user_name = sys.argv[1]
-    user_name = 'paris_gong'
     download(user_name)
-    # print('=============================\n' +
-    #       '全部下载完成\n' +
-    #       '一共下载了' + str(image_count) + '张图片、' + str(video_count) + '个视频\n' +
-    #       '=============================\n')
 
 if __name__ == "__main__":
     main()
